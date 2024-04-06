@@ -2,9 +2,11 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    xmlns:tools="http://schemas.android.com/tools"
     android:orientation="vertical"
     android:padding="12dp"
-    android:weightSum="3">
+    tools:context=".MainActivity"
+    android:weightSum="3" >
 
     <ImageButton
         android:id="@+id/contactsButton"
@@ -14,7 +16,8 @@
         android:src="@drawable/contacts"
         android:scaleType="centerInside"
         android:background="@android:color/white"
-        android:padding="12dp" />
+        android:padding="12dp"
+        android:contentDescription="@string/contactos" />
 
     <ImageButton
         android:id="@+id/cameraButton"
@@ -24,7 +27,8 @@
         android:padding="12dp"
         android:src="@drawable/camera"
         android:scaleType="centerInside"
-        android:background="@android:color/white" />
+        android:background="@android:color/white"
+        android:contentDescription="@string/galeria_de_imagenes" />
 
     <ImageButton
         android:id="@+id/mapaButton"
@@ -34,6 +38,7 @@
         android:padding="12dp"
         android:src="@drawable/osmap"
         android:scaleType="centerInside"
-        android:background="@android:color/white" />
+        android:background="@android:color/white"
+        android:contentDescription="@string/mapa" />
 
 </LinearLayout>

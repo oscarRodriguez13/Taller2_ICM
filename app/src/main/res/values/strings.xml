@@ -1,3 +1,9 @@
 <resources>
     <string name="app_name">Taller2</string>
+    <string name="camara">Camara</string>
+    <string name="galeria">Galeria</string>
+    <string name="contactos">Contactos</string>
+    <string name="galeria_de_imagenes">Galeria de imagenes</string>
+    <string name="mapa">Mapa</string>
+    <string name="imagen">Imagen</string>
 </resources>
