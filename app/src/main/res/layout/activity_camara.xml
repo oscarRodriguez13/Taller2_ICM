@@ -6,16 +6,17 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".CamaraActivity"
+    android:background="@color/white"
     android:padding="12dp" >
 
     <ImageView
         android:id="@+id/imageView"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="500dp"
         android:layout_centerInParent="true"
+        android:contentDescription="@string/imagen"
         android:scaleType="centerInside"
-        app:srcCompat="@drawable/camera"
-        android:contentDescription="@string/imagen" />
+        app:srcCompat="@drawable/camera" />
 
     <LinearLayout
         android:layout_width="match_parent"
