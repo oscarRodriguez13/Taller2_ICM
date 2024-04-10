@@ -66,14 +66,13 @@ class CamaraActivity : AppCompatActivity() {
                     requestPermissions(
                         arrayOf(android.Manifest.permission.CAMERA),
                         Datos.MY_PERMISSION_REQUEST_CAMERA)
-                    Toast.makeText(this, "Se necesita el acceso a la camara para que la aplicacion funcione correctamente", Toast.LENGTH_SHORT).show()
+
                 }
                 else -> {
                     requestPermissions(
                         arrayOf(android.Manifest.permission.CAMERA),
                         Datos.MY_PERMISSION_REQUEST_CAMERA
                     )
-                    Toast.makeText(this, "Se necesita el acceso a la camara para que la aplicacion funcione correctamente", Toast.LENGTH_SHORT).show()
                 }
             }
         }
