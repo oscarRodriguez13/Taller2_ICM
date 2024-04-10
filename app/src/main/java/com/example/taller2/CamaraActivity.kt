@@ -49,7 +49,7 @@ class CamaraActivity : AppCompatActivity() {
         }
 
         galleryButton.setOnClickListener {
-            // Intent explícito para seleccionar una imagen de la galería.
+            // Intent explícito para seleccionar una imagen de la galería
             imagePickerLauncher.launch("image/*")
         }
 
@@ -66,7 +66,6 @@ class CamaraActivity : AppCompatActivity() {
                     requestPermissions(
                         arrayOf(android.Manifest.permission.CAMERA),
                         Datos.MY_PERMISSION_REQUEST_CAMERA)
-
                 }
                 else -> {
                     requestPermissions(
@@ -95,7 +94,7 @@ class CamaraActivity : AppCompatActivity() {
             Datos.MY_PERMISSION_REQUEST_CAMERA -> {
                 // If request is cancelled, the result arrays are empty.
                 if ((grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)) {
-                    Toast.makeText(this, "Gracias!", Toast.LENGTH_SHORT).show()
+                    openCamera()
                 } else {
                     Toast.makeText(this, "Funcionalidades limitadas!", Toast.LENGTH_SHORT).show()
                 }
