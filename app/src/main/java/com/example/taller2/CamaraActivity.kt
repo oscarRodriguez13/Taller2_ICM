@@ -1,6 +1,6 @@
 package com.example.taller2
 
-import android.content.Intent
+import android.content.ContentValues
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -58,21 +58,35 @@ class CamaraActivity : AppCompatActivity() {
                 ContextCompat.checkSelfPermission(
                     this, android.Manifest.permission.CAMERA
                 ) == PackageManager.PERMISSION_GRANTED -> {
-                    Toast.makeText(this, "Gracias!", Toast.LENGTH_SHORT).show()
+                    //Lanzamos la camara
+                    openCamera()
                 }
                 ActivityCompat.shouldShowRequestPermissionRationale(
                     this, android.Manifest.permission.CAMERA) -> {
                     requestPermissions(
                         arrayOf(android.Manifest.permission.CAMERA),
                         Datos.MY_PERMISSION_REQUEST_CAMERA)
+                    Toast.makeText(this, "Se necesita el acceso a la camara para que la aplicacion funcione correctamente", Toast.LENGTH_SHORT).show()
                 }
                 else -> {
                     requestPermissions(
                         arrayOf(android.Manifest.permission.CAMERA),
                         Datos.MY_PERMISSION_REQUEST_CAMERA
                     )
+                    Toast.makeText(this, "Se necesita el acceso a la camara para que la aplicacion funcione correctamente", Toast.LENGTH_SHORT).show()
                 }
             }
+        }
+    }
+
+    private fun openCamera() {
+        val values = ContentValues()
+        values.put(MediaStore.Images.Media.TITLE, "Foto nueva")
+        values.put(MediaStore.Images.Media.DESCRIPTION, "Tomada desde la aplicacion del Taller 2")
+        photoURI = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+
+        photoURI?.let { uri ->
+            takePictureLauncher.launch(uri)
         }
     }
 
@@ -93,4 +107,6 @@ class CamaraActivity : AppCompatActivity() {
             }
         }
     }
+
+
 }
