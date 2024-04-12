@@ -29,5 +29,12 @@ class MainActivity : AppCompatActivity() {
             )
             startActivity(intent)
         }
+        mapaButton.setOnClickListener {
+            val intent = Intent(
+                this,
+                MapaActivity::class.java
+            )
+            startActivity(intent)
+        }
     }
 }
