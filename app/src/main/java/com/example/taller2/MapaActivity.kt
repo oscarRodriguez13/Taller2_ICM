@@ -2,6 +2,7 @@ package com.example.taller2
 
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -11,8 +12,11 @@ import android.location.Geocoder
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.os.AsyncTask
 import android.os.Bundle
+import android.os.StrictMode
 import android.util.Log
+import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
@@ -23,12 +27,16 @@ import com.example.taller2.databinding.ActivityMapaBinding
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import org.osmdroid.api.IMapController
+import org.osmdroid.bonuspack.routing.OSRMRoadManager
+import org.osmdroid.bonuspack.routing.Road
+import org.osmdroid.bonuspack.routing.RoadManager
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.views.overlay.TilesOverlay
 import java.io.IOException
 import kotlin.math.roundToInt
@@ -45,6 +53,29 @@ class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     private var geoPoint: GeoPoint? = null
     private val markers = mutableListOf<Marker>()
     private val RADIUS_OF_EARTH_KM = 6371
+    private lateinit var roadManager: RoadManager
+    private val routePolylineMap = mutableMapOf<Road, Polyline>()
+    private val routeColors = mutableMapOf<Road, Int>()
+
+
+    private inner class FetchRouteTask(private val start: GeoPoint, private val finish: GeoPoint) : AsyncTask<Void, Void, Road>() {
+
+        override fun doInBackground(vararg params: Void?): Road? {
+            val routePoints = ArrayList<GeoPoint>()
+            routePoints.add(start)
+            routePoints.add(finish)
+            return roadManager.getRoad(routePoints)
+        }
+
+        override fun onPostExecute(result: Road?) {
+            super.onPostExecute(result)
+            if (result != null) {
+                drawRoad(result)
+            } else {
+                Toast.makeText(this@MapaActivity, "Error al obtener la ruta", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     @SuppressLint("UseCompatLoadingForDrawables")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -56,6 +87,7 @@ class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         lightSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_LIGHT)
         locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
+        roadManager = OSRMRoadManager(this, "ANDROID")
 
         handlePermissions()
 
@@ -66,6 +98,10 @@ class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         binding.osmMap.overlays.add(createOverlayEvents())
 
         mGeocoder = Geocoder(baseContext)
+
+        binding.centerButton.setOnClickListener {
+            centerCameraOnUser()
+        }
 
         binding.editText.setOnEditorActionListener { v, actionId, event ->
             if (actionId == EditorInfo.IME_ACTION_SEND) {
@@ -97,6 +133,7 @@ class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener 
                                 showDistanceToast(newMarker.position.latitude, newMarker.position.longitude, marker!!.position.latitude, marker!!.position.longitude, addressString)
                                 markers.add(newMarker)
                                 binding.osmMap.overlays.add(newMarker)
+                                drawRoute(marker!!.position, newMarker.position)
 
                                 binding.osmMap.invalidate()
                             } else {
@@ -151,6 +188,7 @@ class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         if (nombreLugar != null) {
             showDistanceToast(loc.latitude, loc.longitude, marker!!.position.latitude, marker!!.position.longitude, nombreLugar)
         }
+        drawRoute(marker!!.position, newMarker.position)
 
         markers.add(newMarker)
         binding.osmMap.overlays.add(newMarker)
@@ -271,35 +309,48 @@ class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         }
     }
 
-    /*private fun updateLocationUI(location: android.location.Location?) {
-        location?.let { loc ->
-            geoPoint = GeoPoint(loc.latitude, loc.longitude)
-
-            // Acceder al controlador del mapa para manipular la posición y el zoom
-            val mapController: IMapController = binding.osmMap.controller
-            mapController.setCenter(geoPoint)
-            mapController.setZoom(18.0)  // Puedes ajustar el nivel de zoom según tus necesidades
-
-            // Comprobar si el marcador ya está inicializado o no
-            if (marker == null) {
-                marker = Marker(binding.osmMap)
-                binding.osmMap.overlays.add(marker)
-            }
-
-            // Actualizar la posición del marcador
-            marker?.position = geoPoint
-            marker?.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-            marker?.title = "Tu ubicación actual"
-
-            // Redibujar el mapa para mostrar los cambios
-            binding.osmMap.invalidate()
-        } ?: run {
-            // Manejo de situación cuando la ubicación es nula
-            Toast.makeText(this, "Ubicación no disponible", Toast.LENGTH_SHORT).show()
-        }
-    }*/
-
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
         // No implementation needed
     }
+
+    private fun drawRoute(start: GeoPoint, finish: GeoPoint) {
+        FetchRouteTask(start, finish).execute()
+    }
+
+    private fun drawRoad(road: Road) {
+        Log.i("OSM_acticity", "Route length: ${road.mLength} klm")
+        Log.i("OSM_acticity", "Duration: ${road.mDuration / 60} min")
+
+        // Verifica si ya existe una Polyline para esta ruta
+        val existingPolyline = routePolylineMap[road]
+
+        if (existingPolyline == null) {
+            // Si no existe, crea una nueva Polyline
+            val newPolyline = RoadManager.buildRoadOverlay(road)
+            val color = generateUniqueColor()
+            newPolyline.outlinePaint.color = color
+            newPolyline.outlinePaint.strokeWidth = 10f
+            routePolylineMap[road] = newPolyline
+            routeColors[road] = color
+            binding.osmMap.overlays.add(newPolyline)
+        }
+
+        binding.osmMap.invalidate()
+    }
+
+    private fun generateUniqueColor(): Int {
+        return Color.rgb((Math.random() * 256).toInt(), (Math.random() * 256).toInt(), (Math.random() * 256).toInt())
+    }
+
+    private fun centerCameraOnUser() {
+        marker?.let {
+            val mapController: IMapController = binding.osmMap.controller
+            mapController.setCenter(marker!!.position)
+            mapController.setZoom(18.0)
+        } ?: run {
+            Toast.makeText(this, "Ubicación no disponible", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+
 }
