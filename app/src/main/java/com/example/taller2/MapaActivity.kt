@@ -14,6 +14,7 @@ import android.location.LocationManager
 import android.os.Bundle
 import android.util.Log
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -68,54 +69,60 @@ class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener 
 
         binding.editText.setOnEditorActionListener { v, actionId, event ->
             if (actionId == EditorInfo.IME_ACTION_SEND) {
-            }
-            val addressString = binding.editText.text.toString()
-            //val addressString = "Universidad de la Sabana"
-            if (addressString.isNotEmpty()) {
-                try {
-                    if (Geocoder.isPresent()) {
-                        Log.d("MapaActivity", "Dirección a buscar: $addressString")
-                        val addresses: List<Address>? = mGeocoder!!.getFromLocationName(
-                            addressString, 2, Datos.lowerLeftLatitude, Datos.lowerLeftLongitude,
-                            Datos.upperRightLatitude, Datos.upperRightLongitude
-                        )
+                val inputMethodManager = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+                inputMethodManager.hideSoftInputFromWindow(binding.editText.windowToken, 0)
 
-                        if (addresses != null && addresses.isNotEmpty()) {
-                            val addressResult = addresses[0]
-                            val position = GeoPoint(addressResult.latitude, addressResult.longitude)
-                            val mapController: IMapController = binding.osmMap.controller
-                            mapController.setCenter(position)
-                            mapController.setZoom(18.0)
+                val addressString = binding.editText.text.toString()
+                if (addressString.isNotEmpty()) {
+                    try {
+                        if (Geocoder.isPresent()) {
+                            Log.d("MapaActivity", "Dirección a buscar: $addressString")
+                            val addresses: List<Address>? = mGeocoder!!.getFromLocationName(
+                                addressString, 2, Datos.lowerLeftLatitude, Datos.lowerLeftLongitude,
+                                Datos.upperRightLatitude, Datos.upperRightLongitude
+                            )
 
-                            val newMarker = Marker(binding.osmMap)
-                            newMarker.position = position
-                            newMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                            newMarker.title = addressString
+                            if (addresses != null && addresses.isNotEmpty()) {
+                                val addressResult = addresses[0]
+                                val position = GeoPoint(addressResult.latitude, addressResult.longitude)
+                                val mapController: IMapController = binding.osmMap.controller
+                                mapController.setCenter(position)
+                                mapController.setZoom(18.0)
 
-                            markers.add(newMarker)
-                            binding.osmMap.overlays.add(newMarker)
+                                val newMarker = Marker(binding.osmMap)
+                                newMarker.position = position
+                                newMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                                newMarker.title = addressString
 
-                            binding.osmMap.invalidate()
+                                showDistanceToast(newMarker.position.latitude, newMarker.position.longitude, marker!!.position.latitude, marker!!.position.longitude, addressString)
+                                markers.add(newMarker)
+                                binding.osmMap.overlays.add(newMarker)
+
+                                binding.osmMap.invalidate()
+                            } else {
+                                Toast.makeText(this, "Dirección no encontrada", Toast.LENGTH_SHORT).show()
+                                Log.e("MapaActivity", "No se encontraron direcciones para: $addressString")
+                            }
+
                         } else {
-                            Toast.makeText(this, "Dirección no encontrada", Toast.LENGTH_SHORT).show()
-                            Log.e("MapaActivity", "No se encontraron direcciones para: $addressString")
+                            Toast.makeText(this, "Geocoder no disponible", Toast.LENGTH_SHORT).show()
+                            Log.e("MapaActivity", "Geocoder no disponible")
                         }
 
-                    } else {
-                        Toast.makeText(this, "Geocoder no disponible", Toast.LENGTH_SHORT).show()
-                        Log.e("MapaActivity", "Geocoder no disponible")
+                    } catch (e: IOException) {
+                        e.printStackTrace()
+                        Toast.makeText(this, "Error al buscar la dirección", Toast.LENGTH_SHORT).show()
+                        Log.e("MapaActivity", "Error al buscar la dirección: ${e.message}")
                     }
-
-                } catch (e: IOException) {
-                    e.printStackTrace()
-                    Toast.makeText(this, "Error al buscar la dirección", Toast.LENGTH_SHORT).show()
-                    Log.e("MapaActivity", "Error al buscar la dirección: ${e.message}")
+                } else {
+                    Toast.makeText(this, "La dirección está vacía", Toast.LENGTH_SHORT).show()
                 }
+                true
             } else {
-                Toast.makeText(this, "La dirección esta vacía", Toast.LENGTH_SHORT).show()
+                false
             }
-            true
         }
+
     }
 
     private fun createOverlayEvents(): MapEventsOverlay {
