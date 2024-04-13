@@ -23,11 +23,14 @@ import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import org.osmdroid.api.IMapController
 import org.osmdroid.config.Configuration
+import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.TilesOverlay
 import java.io.IOException
+import kotlin.math.roundToInt
 
 class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener {
 
@@ -40,6 +43,7 @@ class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     private var mGeocoder: Geocoder? = null
     private var geoPoint: GeoPoint? = null
     private val markers = mutableListOf<Marker>()
+    private val RADIUS_OF_EARTH_KM = 6371
 
     @SuppressLint("UseCompatLoadingForDrawables")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,6 +62,7 @@ class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         setContentView(binding.root)
         binding.osmMap.setTileSource(TileSourceFactory.MAPNIK)
         binding.osmMap.setMultiTouchControls(true)
+        binding.osmMap.overlays.add(createOverlayEvents())
 
         mGeocoder = Geocoder(baseContext)
 
@@ -111,6 +116,77 @@ class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener 
             }
             true
         }
+    }
+
+    private fun createOverlayEvents(): MapEventsOverlay {
+        val overlayEventos = MapEventsOverlay(object : MapEventsReceiver {
+            override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
+                return false
+            }
+            override fun longPressHelper(loc: GeoPoint): Boolean {
+                longPressOnMap(loc)
+                return true
+            }
+        })
+        return overlayEventos
+    }
+
+    private fun longPressOnMap(loc: GeoPoint) {
+        val mapController: IMapController = binding.osmMap.controller
+        mapController.setCenter(loc)
+        mapController.setZoom(18.0)
+
+        val newMarker = Marker(binding.osmMap)
+        newMarker.position = loc
+        newMarker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+        val nombreLugar = buscarNombrePorLocalizacion(loc)
+        newMarker.title = nombreLugar
+        if (nombreLugar != null) {
+            showDistanceToast(loc.latitude, loc.longitude, marker!!.position.latitude, marker!!.position.longitude, nombreLugar)
+        }
+
+        markers.add(newMarker)
+        binding.osmMap.overlays.add(newMarker)
+
+        binding.osmMap.invalidate()
+    }
+
+    private fun buscarNombrePorLocalizacion(loc: GeoPoint): String? {
+        try {
+            if (Geocoder.isPresent()) {
+                val addresses: List<Address>? = mGeocoder?.getFromLocation(loc.latitude, loc.longitude, 1)
+
+                if (addresses != null && addresses.isNotEmpty()) {
+                    val address = addresses[0]
+                    // Combina todos los campos de dirección en una cadena
+                    val addressFragments = with(address) {
+                        (0..maxAddressLineIndex).map { getAddressLine(it) }
+                    }
+                    return addressFragments.joinToString(separator = "\n")
+                }
+            } else {
+                Toast.makeText(this, "Geocoder no disponible", Toast.LENGTH_SHORT).show()
+                Log.e("MapaActivity", "Geocoder no disponible")
+            }
+        } catch (e: IOException) {
+            e.printStackTrace()
+            Toast.makeText(this, "Error al obtener la dirección", Toast.LENGTH_SHORT).show()
+            Log.e("MapaActivity", "Error al obtener la dirección: ${e.message}")
+        }
+        return null
+    }
+
+    private fun showDistanceToast(lat1: Double, long1: Double, lat2: Double, long2: Double, nombreLugar: String) {
+        val latDistance = Math.toRadians(lat1 - lat2)
+        val lngDistance = Math.toRadians(long1 - long2)
+        val a = (Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(lngDistance / 2) * Math.sin(lngDistance / 2))
+        val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+        val result = RADIUS_OF_EARTH_KM * c
+        val distance = (result * 100.0).roundToInt() / 100.0
+
+        Toast.makeText(this, "Estas a $distance km de $nombreLugar", Toast.LENGTH_LONG).show()
     }
 
     private fun handlePermissions() {
