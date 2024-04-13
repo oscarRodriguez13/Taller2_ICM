@@ -6,4 +6,5 @@
     <string name="galeria_de_imagenes">Galeria de imagenes</string>
     <string name="mapa">Mapa</string>
     <string name="imagen">Imagen</string>
+    <string name="title_activity_maps">MapsActivity</string>
 </resources>
