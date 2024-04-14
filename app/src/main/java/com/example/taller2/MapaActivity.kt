@@ -14,9 +14,7 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.os.AsyncTask
 import android.os.Bundle
-import android.os.StrictMode
 import android.util.Log
-import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
@@ -26,20 +24,34 @@ import androidx.core.content.ContextCompat
 import com.example.taller2.databinding.ActivityMapaBinding
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
+import org.json.JSONArray
 import org.osmdroid.api.IMapController
 import org.osmdroid.bonuspack.routing.OSRMRoadManager
 import org.osmdroid.bonuspack.routing.Road
 import org.osmdroid.bonuspack.routing.RoadManager
 import org.osmdroid.config.Configuration
+import org.osmdroid.events.DelayedMapListener
 import org.osmdroid.events.MapEventsReceiver
+import org.osmdroid.events.MapListener
+import org.osmdroid.events.ScrollEvent
+import org.osmdroid.events.ZoomEvent
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.views.overlay.TilesOverlay
+import java.io.BufferedWriter
+import java.io.File
+import java.io.FileWriter
 import java.io.IOException
+import java.io.Writer
+import java.util.Date
+import kotlin.math.atan2
+import kotlin.math.cos
 import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener {
 
@@ -56,7 +68,10 @@ class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     private lateinit var roadManager: RoadManager
     private val routePolylineMap = mutableMapOf<Road, Polyline>()
     private val routeColors = mutableMapOf<Road, Int>()
-
+    private var previousZoomLevel: Double = 0.0
+    private val localizaciones = JSONArray()
+    private var lastLocation: Location? = null
+    private var locationCounter = 0
 
     private inner class FetchRouteTask(private val start: GeoPoint, private val finish: GeoPoint) : AsyncTask<Void, Void, Road>() {
 
@@ -80,29 +95,28 @@ class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     @SuppressLint("UseCompatLoadingForDrawables")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         Configuration.getInstance().userAgentValue = applicationContext.packageName
-
         mFusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this)
         sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
         lightSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_LIGHT)
         locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
         roadManager = OSRMRoadManager(this, "ANDROID")
-
         handlePermissions()
-
         binding = ActivityMapaBinding.inflate(layoutInflater)
         setContentView(binding.root)
         binding.osmMap.setTileSource(TileSourceFactory.MAPNIK)
         binding.osmMap.setMultiTouchControls(true)
+        previousZoomLevel = binding.osmMap.zoomLevelDouble
         binding.osmMap.overlays.add(createOverlayEvents())
-
         mGeocoder = Geocoder(baseContext)
-
         binding.centerButton.setOnClickListener {
             centerCameraOnUser()
         }
+        editTextListener()
+        mapZoomListener()
+    }
 
+    private fun editTextListener(){
         binding.editText.setOnEditorActionListener { v, actionId, event ->
             if (actionId == EditorInfo.IME_ACTION_SEND) {
                 val inputMethodManager = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
@@ -118,7 +132,7 @@ class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener 
                                 Datos.upperRightLatitude, Datos.upperRightLongitude
                             )
 
-                            if (addresses != null && addresses.isNotEmpty()) {
+                            if (!addresses.isNullOrEmpty()) {
                                 val addressResult = addresses[0]
                                 val position = GeoPoint(addressResult.latitude, addressResult.longitude)
                                 val mapController: IMapController = binding.osmMap.controller
@@ -162,14 +176,41 @@ class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener 
 
     }
 
+    private fun mapZoomListener(){
+        binding.osmMap.addMapListener(DelayedMapListener(object : MapListener {
+            override fun onScroll(event: ScrollEvent?): Boolean {
+                return false
+            }
+
+            override fun onZoom(event: ZoomEvent): Boolean {
+                val currentZoomLevel = binding.osmMap.zoomLevelDouble
+                previousZoomLevel = currentZoomLevel
+                return true
+            }
+        }, 100))
+    }
     private fun createOverlayEvents(): MapEventsOverlay {
         val overlayEventos = MapEventsOverlay(object : MapEventsReceiver {
+
+
             override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
                 return false
             }
             override fun longPressHelper(loc: GeoPoint): Boolean {
-                longPressOnMap(loc)
-                return true
+                val currentZoomLevel = binding.osmMap.zoomLevelDouble
+
+
+                if(previousZoomLevel == currentZoomLevel){
+                    longPressOnMap(loc)
+                    previousZoomLevel = currentZoomLevel
+                    return true
+                } else {
+                    previousZoomLevel = currentZoomLevel
+                    return false
+                }
+
+
+
             }
         })
         return overlayEventos
@@ -201,7 +242,7 @@ class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener 
             if (Geocoder.isPresent()) {
                 val addresses: List<Address>? = mGeocoder?.getFromLocation(loc.latitude, loc.longitude, 1)
 
-                if (addresses != null && addresses.isNotEmpty()) {
+                if (!addresses.isNullOrEmpty()) {
                     val address = addresses[0]
                     // Combina todos los campos de dirección en una cadena
                     val addressFragments = with(address) {
@@ -224,10 +265,10 @@ class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     private fun showDistanceToast(lat1: Double, long1: Double, lat2: Double, long2: Double, nombreLugar: String) {
         val latDistance = Math.toRadians(lat1 - lat2)
         val lngDistance = Math.toRadians(long1 - long2)
-        val a = (Math.sin(latDistance / 2) * Math.sin(latDistance / 2)
-                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
-                * Math.sin(lngDistance / 2) * Math.sin(lngDistance / 2))
-        val c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+        val a = (sin(latDistance / 2) * sin(latDistance / 2)
+                + cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2))
+                * sin(lngDistance / 2) * sin(lngDistance / 2))
+        val c = 2 * atan2(sqrt(a), sqrt(1 - a))
         val result = RADIUS_OF_EARTH_KM * c
         val distance = (result * 100.0).roundToInt() / 100.0
 
@@ -263,14 +304,12 @@ class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener 
     override fun onResume() {
         sensorManager?.registerListener(this, lightSensor, SensorManager.SENSOR_DELAY_NORMAL)
         locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 2000, 10f, this)
-        val latitude = 4.62
-        val longitude = -74.07
-        val startPoint = GeoPoint(latitude, longitude)
+
         super.onResume()
         binding.osmMap.onResume()
         val mapController: IMapController = binding.osmMap.controller
         mapController.setZoom(18.0)
-        mapController.setCenter(startPoint)
+        previousZoomLevel = binding.osmMap.zoomLevelDouble
     }
 
     override fun onPause() {
@@ -280,12 +319,32 @@ class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         locationManager.removeUpdates(this)
     }
 
+
     override fun onLocationChanged(location: Location) {
+
+
+        // Comprobación inicial o actualización si el movimiento es significativo
+        if (locationCounter == 0 || lastLocation!!.distanceTo(location) > 30) {
+            if (locationCounter == 0) {
+                locationCounter += 1
+            } else {
+                // Acciones cuando el movimiento es mayor a 30 metros
+                Log.i("Accion", "Guardando en JSON")
+                writeJSONObject(location.latitude.toString(), location.longitude.toString())
+                Log.i("Localizacion: ", "Latitud ${location.latitude}")
+                Log.i("Localizacion: ", "Longitud ${location.longitude}")
+            }
+
+            // Actualizar lastLocation con la nueva ubicación
+            lastLocation = location
+        }
+
         geoPoint = GeoPoint(location.latitude, location.longitude)
         val mapController: IMapController = binding.osmMap.controller
         mapController.setCenter(geoPoint)
         mapController.setZoom(18.0)
 
+        // Manejo del marcador
         if (marker == null) {
             marker = Marker(binding.osmMap)
             binding.osmMap.overlays.add(marker)
@@ -295,6 +354,7 @@ class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener 
         marker?.title = "Tú"
         binding.osmMap.invalidate()
     }
+
 
     override fun onSensorChanged(event: SensorEvent?) {
         event?.let {
@@ -347,10 +407,36 @@ class MapaActivity : AppCompatActivity(), SensorEventListener, LocationListener 
             val mapController: IMapController = binding.osmMap.controller
             mapController.setCenter(marker!!.position)
             mapController.setZoom(18.0)
+            previousZoomLevel = binding.osmMap.zoomLevelDouble
+
         } ?: run {
             Toast.makeText(this, "Ubicación no disponible", Toast.LENGTH_SHORT).show()
         }
     }
 
 
+    private fun writeJSONObject(latitud: String, longitud: String) {
+
+        val newLatitud = latitud.toDouble()
+
+        val newLongitud = longitud.toDouble()
+
+
+        localizaciones.put(
+            Localizacion(newLatitud,newLongitud,Date(System.currentTimeMillis()).toString()
+            ).toJSON()
+        )
+        val output: Writer?
+        val filename = "locations.json"
+        try {
+            val file = File(baseContext.getExternalFilesDir(null), filename)
+            Log.i("LOCATION", "Ubicacion de archivo: $file")
+            output = BufferedWriter(FileWriter(file))
+            output.write(localizaciones.toString())
+            output.close()
+            Toast.makeText(applicationContext, "Location saved", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Log.e("LOCATION", "Error al guardar la ubicación: ${e.message}", e)
+        }
+    }
 }
