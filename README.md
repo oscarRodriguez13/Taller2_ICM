@@ -8,4 +8,4 @@ Este es el repositorio del Taller 2, desarrollado por:
 
 ## Video
 
-Aquí puedes encontrar un video relacionado con el taller: 
+Aquí puedes encontrar un video relacionado con el taller: https://youtu.be/iSa-G7vsOKI
